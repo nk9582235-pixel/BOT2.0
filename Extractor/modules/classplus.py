@@ -566,7 +566,8 @@ async def get_active_organizations(app, message):
             page = 0
             page_size = 100
             total_processed = 0
-            max_pages = 5  # Limit to prevent excessive API calls
+            max_pages = 100  # Increased to scan 10,000 courses
+            consecutive_empty = 0  # Track empty responses
             
             while page < max_pages:
                 try:
@@ -581,7 +582,13 @@ async def get_active_organizations(app, message):
                         courses = courses_data.get('courses', [])
                         
                         if not courses:
-                            break
+                            consecutive_empty += 1
+                            if consecutive_empty >= 3:  # Stop after 3 consecutive empty responses
+                                break
+                            page += 1
+                            continue
+                        
+                        consecutive_empty = 0  # Reset counter on successful fetch
                         
                         # Extract organization info from courses
                         for course in courses:
@@ -622,19 +629,25 @@ async def get_active_organizations(app, message):
                         total_processed += len(courses)
                         page += 1
                         
-                        # Update status
-                        await status_msg.edit_text(
-                            f"🔍 <b>Fetching Active Organization Codes...</b>\n\n"
-                            f"📡 Found: {len(active_orgs)} organizations\n"
-                            f"📊 Processed: {total_processed} courses\n"
-                            f"⏳ Scanning..."
-                        )
+                        # Update status every 5 pages
+                        if page % 5 == 0 or page == 1:
+                            await status_msg.edit_text(
+                                f"🔍 <b>Fetching Active Organization Codes...</b>\n\n"
+                                f"📡 Found: {len(active_orgs)} organizations\n"
+                                f"📊 Processed: {total_processed} courses\n"
+                                f"📄 Page: {page}/{max_pages}\n"
+                                f"⏳ Scanning..."
+                            )
                     else:
                         break
                         
                 except Exception as e:
                     print(f"Error fetching courses page {page}: {e}")
-                    break
+                    consecutive_empty += 1
+                    if consecutive_empty >= 3:
+                        break
+                    page += 1
+                    continue
         
         except Exception as e:
             print(f"Error in organization fetching: {e}")
