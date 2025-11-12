@@ -1,0 +1,68 @@
+{
+  "name": "𝖤𝖣𝖴𝖢𝖠𝖳𝖨𝖮𝖭 𝖧𝖴𝖡",
+  "description": "Telegram Bot using Pyrogram",
+  "repository": "https://github.com/Pod94",
+  "env": {
+    "API_ID": {
+      "description": "Your Telegram API ID from https://my.telegram.org",
+      "value": "",
+      "required": true
+    },
+    "API_HASH": {
+      "description": "Your Telegram API Hash from https://my.telegram.org",
+      "value": "",
+      "required": true
+    },
+    "BOT_TOKEN": {
+      "description": "Your Telegram Bot Token from @BotFather",
+      "value": "",
+      "required": true
+    },
+    "BOT_USERNAME": {
+      "description": "Your Bot Username (without @)",
+      "value": "",
+      "required": true
+    },
+    "OWNER_ID": {
+      "description": "Your Telegram User ID (Owner)",
+      "value": "",
+      "required": true
+    },
+    "SUDO_USERS": {
+      "description": "Comma-separated list of sudo users' IDs",
+      "value": "",
+      "required": false
+    },
+    "CHANNEL_ID": {
+      "description": "Your log channel ID (format: -100...)",
+      "value": "",
+      "required": true
+    },
+    "MONGO_URL": {
+      "description": "Your MongoDB Atlas connection URL",
+      "value": "",
+      "required": true
+    },
+    "PREMIUM_LOGS": {
+      "description": "Premium log channel ID",
+      "value": "",
+      "required": true
+    }
+  },
+  "formation": {
+        "worker": {
+            "quantity": 1,
+            "size": "standard-2x"
+        }
+    }, 
+  "stack": "heroku-22",
+  "addons": [],
+  "buildpacks": [
+    {
+      "url": "heroku/python"
+    },
+    {
+      "url": "https://github.com/jonathanong/heroku-buildpack-ffmpeg-latest.git"
+    }
+  ]
+}

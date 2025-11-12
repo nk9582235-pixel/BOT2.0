@@ -1,0 +1,263 @@
+================================================================================
+CLASSPLUS BOT - QUICK REFERENCE GUIDE
+================================================================================
+
+📌 QUICK START
+================================================================================
+
+1. Get Active Organization Codes
+   └─ Send: /cpactivorgs
+      Receives: Text file with all active organization codes
+
+2. Extract Content from Organization
+   └─ Send: /cp
+      Then provide: ORG_CODE*MOBILE_NUMBER
+      Example: ujaliaf*9876543210
+
+3. Verify Multiple Org Codes
+   └─ Send: /cporgcheck
+      Reply to: Text file with org codes (one per line)
+      Result: Status of each code
+
+================================================================================
+📋 BOT COMMANDS SUMMARY
+================================================================================
+
+/cpactivorgs  (Primary)    → Retrieve active organization codes from ClassPlus
+/cpgetorgs    (Alias)      → Same as /cpactivorgs
+/cp                        → Extract content from specific organization
+/cporgcheck                → Check multiple organization codes at once
+
+================================================================================
+🔍 EXTRACTION WORKFLOW
+================================================================================
+
+STEP 1: Discover Organizations
+  Command:  /cpactivorgs
+  Duration: 30-60 seconds
+  Output:   Text file with organization codes + details
+
+STEP 2: Select Organization
+  Get org code from the file generated in Step 1
+  Format: ujaliaf, upschool, physicswallah, etc.
+
+STEP 3: Extract from Organization
+  Command: /cp
+  Input:   ORG_CODE*MOBILE_NUMBER
+  Example: ujaliaf*9876543210
+  
+  Process:
+    a) Bot verifies organization exists
+    b) OTP sent to your mobile
+    c) Bot asks for OTP
+    d) Bot verifies and logs in
+    e) Bot lists available courses/batches
+
+STEP 4: Select Course/Batch
+  Reply with: Number of the course/batch you want
+
+STEP 5: Extract Content
+  Bot downloads all course content and creates file
+
+STEP 6: Receive File
+  Bot sends extracted content file to you
+
+================================================================================
+📝 FILE FORMATS
+================================================================================
+
+INPUT FILE FORMAT (for /cporgcheck):
+  ───────────────────────────────────
+  ujaliaf
+  upschool
+  physicswallah
+  classplus
+  careerwill
+
+OUTPUT FILE FORMAT (from /cpactivorgs):
+  ─────────────────────────────────────
+  CLASSPLUS ACTIVE ORGANIZATION CODES
+  
+  ORGANIZATION CODES:
+  ujaliaf
+  upschool
+  physicswallah
+  ...
+  
+  DETAILED ORGANIZATION INFORMATION:
+  1. Organization Code: ujaliaf
+     Organization Name: Ujala Foundation
+     Organization ID: 711528
+     Status: ✅ Active
+  ...
+
+================================================================================
+🔑 IMPORTANT ORGANIZATION CODES
+================================================================================
+
+Popular Organizations (Examples):
+  • ujaliaf           - Ujala Foundation
+  • upschool          - UpSchool
+  • physicswallah     - Physics Wallah
+  • classplus         - ClassPlus
+  • careerwill        - CareerWill
+  • adda247           - ADDA 247
+  • khan              - Khan Academy
+  • pw                - Physics Wallah (alternate)
+
+Note: Use /cpactivorgs to get the complete list of active organizations
+
+================================================================================
+⚙️ API ENDPOINTS USED
+================================================================================
+
+All requests to: https://api.classplusapp.com/v2/
+
+Main Endpoints:
+  1. Get Org Details:
+     GET /v2/orgs/{org_code}
+
+  2. Generate OTP:
+     POST /v2/otp/generate
+
+  3. Verify OTP:
+     POST /v2/users/verify
+
+  4. Get Courses:
+     GET /v2/courses?tabCategoryId=1
+
+  5. Search Published Courses:
+     GET /v2/course/search/published?limit=100&offset=0
+
+  6. Get Course Content:
+     GET /v2/course/content/get?courseId={id}&folderId={id}
+
+  7. Get Live Videos:
+     GET /v2/course/live/list/videos?type=2&entityId={id}
+
+================================================================================
+🛠️ REQUIRED HEADERS
+================================================================================
+
+For Unauthenticated Requests:
+  ─────────────────────────
+  Accept: application/json, text/plain, */*
+  region: IN
+  accept-language: en
+  Content-Type: application/json;charset=utf-8
+  Api-Version: 51
+  device-id: {random_uuid}
+  user-agent: Mobile-Android
+  app-version: 1.4.65.3
+  api-version: 29
+
+For Authenticated Requests:
+  ───────────────────────
+  x-access-token: {token_from_login}
+  user-agent: Mobile-Android
+  app-version: 1.4.65.3
+  api-version: 29
+  device-id: {random_uuid}
+
+================================================================================
+❌ TROUBLESHOOTING
+================================================================================
+
+Problem: No organizations found
+  → Solution: Wait and retry (/cpactivorgs sometimes takes time)
+  → Alternative: Use known org codes with /cp
+
+Problem: OTP not received
+  → Check: Mobile number format (should include country code)
+  → Try: Different mobile number
+  → Retry: Send /cp command again
+
+Problem: "NO BATCH FOUND"
+  → Check: Organization code is correct
+  → Verify: Org code in list from /cpactivorgs
+  → Try: Different organization
+
+Problem: Token invalid
+  → Solution: Start /cp command again
+  → Note: Tokens expire after some time
+  → Retry: Complete OTP verification process
+
+Problem: Timeout error
+  → Try: Again with /cpactivorgs
+  → Wait: API might be temporarily slow
+  → Check: Network connection
+
+================================================================================
+📊 PERFORMANCE METRICS
+================================================================================
+
+Operation               Duration          Status
+──────────────────────────────────────────────────
+/cpactivorgs           30-60 seconds      ✓ Normal
+OTP Generation         5-10 seconds       ✓ Fast
+OTP Verification       5-10 seconds       ✓ Fast
+Course Extraction      30-120 seconds     ⚠ Depends on size
+File Generation        5-10 seconds       ✓ Fast
+Total Process (A-Z)    ~2-5 minutes       ✓ Typical
+
+Limits:
+  • Organizations scanned: ~500 (per /cpactivorgs run)
+  • File size: Usually < 100MB
+  • API timeout: 10 seconds per request
+  • Concurrent users: Recommended 1 extraction per minute
+
+================================================================================
+🔐 SECURITY & PRIVACY
+================================================================================
+
+Security Measures:
+  ✓ HTTPS for all API requests
+  ✓ CloudScraper for anti-bot handling
+  ✓ Random device IDs per request
+  ✓ Temporary session tokens
+  ✓ Auto-delete temporary files
+
+Your Data:
+  ✓ Mobile numbers not stored permanently
+  ✓ Access tokens are temporary
+  ✓ Files deleted after sending
+  ✓ Logs stored in premium channel only
+
+Recommendations:
+  ⚠️  Use your own mobile number only
+  ⚠️  Don't share access tokens
+  ⚠️  Don't share credentials with anyone
+  ⚠️  Review premium logs for security
+
+================================================================================
+📞 SUPPORT & HELP
+================================================================================
+
+Commands:
+  /cpactivorgs  - Get help with retrieving org codes
+  /cp           - Get help with extraction
+  /cporgcheck   - Get help with bulk verification
+
+Documentation:
+  → CLASSPLUS_ORG_EXTRACTION_GUIDE.txt - Full detailed guide
+  → This file - Quick reference
+
+Error Messages:
+  Check bot's error messages for specific issues
+  Review logs in premium logs channel
+  Try again with correct format
+
+================================================================================
+✅ NEXT STEPS
+================================================================================
+
+1. Try /cpactivorgs to discover organizations
+2. Pick an organization code from the results
+3. Use /cp with the org code and your mobile number
+4. Verify with OTP when prompted
+5. Select course/batch to extract
+6. Download extracted content file
+
+That's it! Happy extracting! 🎓
+
+================================================================================

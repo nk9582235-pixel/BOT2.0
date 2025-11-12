@@ -1,0 +1,459 @@
+================================================================================
+CLASSPLUS ACTIVE ORGANIZATION CODES - EXTRACTION & VERIFICATION GUIDE
+================================================================================
+
+This guide explains how to extract and verify active organization codes from 
+the ClassPlus platform using the bot's new functionality.
+
+================================================================================
+1. NEW BOT COMMANDS
+================================================================================
+
+Two new commands have been added to retrieve active organization codes:
+
+  /cpactivorgs  - Get active organization codes from ClassPlus
+  /cpgetorgs    - Alias for the above command
+
+================================================================================
+2. HOW TO RETRIEVE ACTIVE ORGANIZATION CODES
+================================================================================
+
+Step 1: Send Command
+  Simply send /cpactivorgs or /cpgetorgs to your bot
+
+Step 2: Wait for Processing
+  The bot will:
+  ✅ Connect to ClassPlus API
+  ✅ Query published courses
+  ✅ Extract organization codes from course links
+  ✅ Verify each code by fetching organization details
+  ✅ Process up to 500 courses (5 pages of 100 courses each)
+
+Step 3: Receive Output File
+  The bot will send you a text file containing:
+  • List of all active organization codes (one per line)
+  • Detailed information for each organization
+  • Instructions on how to use the codes
+  • API endpoints for verification
+
+================================================================================
+3. OUTPUT FILE FORMAT
+================================================================================
+
+The generated text file contains three main sections:
+
+SECTION 1: ORGANIZATION CODES (Simple List)
+  ├─ One organization code per line
+  ├─ Example codes:
+  │  ujaliaf
+  │  upschool
+  │  physicswallah
+  │  ...
+  └─ Perfect for bulk processing with /cporgcheck command
+
+SECTION 2: DETAILED ORGANIZATION INFORMATION
+  ├─ Organization Code: ujaliaf
+  ├─ Organization Name: Ujala Foundation
+  ├─ Organization ID: 711528
+  ├─ Status: ✅ Active
+  └─ API URL: https://api.classplusapp.com/v2/orgs/ujaliaf
+
+SECTION 3: USAGE INSTRUCTIONS
+  ├─ How to use with /cp command
+  ├─ How to verify organization details
+  └─ How to use with bulk /cporgcheck command
+
+================================================================================
+4. USING EXTRACTED ORGANIZATION CODES
+================================================================================
+
+Method A: Single Organization Extraction (Using /cp Command)
+  ────────────────────────────────────────────────────────
+  Command: /cp
+  
+  Then provide credentials in format:
+    ORG_CODE*MOBILE_NUMBER
+    
+  Example:
+    ujaliaf*9876543210
+    
+  The bot will:
+  1. Verify the organization code
+  2. Send OTP to the provided mobile number
+  3. Ask for OTP verification
+  4. Extract all available courses and content
+
+Method B: Bulk Organization Verification (Using /cporgcheck Command)
+  ───────────────────────────────────────────────────────────────
+  Command: /cporgcheck
+  
+  Steps:
+  1. Create a text file with organization codes (one per line)
+  2. Upload the text file to the bot
+  3. Reply to the file with /cporgcheck command
+  4. The bot will check each code and append status messages:
+     ✅ "Sᴇɴᴅ ɪɴᴅᴇx ɴᴜᴍʙᴇʀ ᴏғ ᴛʜᴇ ᴄᴀᴛᴇɢᴏʀʏ ɴᴀᴍᴇ" - if course found
+     ❌ "Eʀʀᴏʀ: Dɪᴅɴ'ᴛ Fɪɴᴅ Aɴʏ Cᴏᴜʀsᴇ" - if no course found
+
+Example File for /cporgcheck:
+  ──────────────────────────
+  ujaliaf
+  upschool
+  physicswallah
+  classplus
+  careerwill
+
+================================================================================
+5. API ENDPOINTS FOR MANUAL VERIFICATION
+================================================================================
+
+All ClassPlus APIs are hosted at: https://api.classplusapp.com/v2/
+
+Key endpoints for organization verification:
+
+1. Get Organization Details
+   ────────────────────────
+   Endpoint: GET /v2/orgs/{org_code}
+   
+   Example:
+     curl "https://api.classplusapp.com/v2/orgs/ujaliaf" \
+       -H "Accept: application/json"
+   
+   Response includes:
+   {
+     "data": {
+       "orgId": 711528,
+       "orgName": "Ujala Foundation",
+       "orgCode": "ujaliaf",
+       ...
+     }
+   }
+
+2. Generate OTP for Login
+   ──────────────────────
+   Endpoint: POST /v2/otp/generate
+   
+   Headers Required:
+     - Content-Type: application/json
+     - Api-Version: 51
+     - Accept: application/json
+     - region: IN
+   
+   Payload:
+   {
+     "countryExt": "91",
+     "orgCode": "ujaliaf",
+     "viaSms": "1",
+     "mobile": "9876543210",
+     "orgId": 711528,
+     "otpCount": 0
+   }
+
+3. Verify OTP
+   ─────────
+   Endpoint: POST /v2/users/verify
+   
+   Payload:
+   {
+     "otp": "123456",
+     "countryExt": "91",
+     "sessionId": "{session_id_from_otp_response}",
+     "orgId": 711528,
+     "fingerprintId": "{random_uuid}",
+     "mobile": "9876543210"
+   }
+
+4. Get Available Courses
+   ──────────────────────
+   Endpoint: GET /v2/courses?tabCategoryId=1
+   
+   Headers Required:
+     - x-access-token: {access_token_from_verify}
+     - user-agent: Mobile-Android
+     - app-version: 1.4.65.3
+     - api-version: 29
+
+5. Search Published Courses
+   ────────────────────────
+   Endpoint: GET /v2/course/search/published
+   
+   Query Parameters:
+     - limit: 100 (courses per page)
+     - offset: 0 (page offset)
+     - sortBy: courseCreationDate
+     - status: published
+   
+   Example:
+     {apiurl}/v2/course/search/published?limit=100&offset=0&sortBy=courseCreationDate&status=published
+
+6. Get Course Content
+   ──────────────────
+   Endpoint: GET /v2/course/content/get
+   
+   Query Parameters:
+     - courseId: {course_id}
+     - folderId: {folder_id}
+
+================================================================================
+6. REQUIRED HEADERS FOR API REQUESTS
+================================================================================
+
+For unauthenticated requests (e.g., organization lookup):
+  ─────────────────────────────────────────────────────
+  {
+    "Accept": "application/json, text/plain, */*",
+    "region": "IN",
+    "accept-language": "en",
+    "Content-Type": "application/json;charset=utf-8",
+    "Api-Version": "51",
+    "device-id": "{random_uuid}",
+    "user-agent": "Mobile-Android",
+    "app-version": "1.4.65.3",
+    "api-version": "29"
+  }
+
+For authenticated requests (after login):
+  ──────────────────────────────────────
+  {
+    "x-access-token": "{token_from_verify_or_register}",
+    "user-agent": "Mobile-Android",
+    "app-version": "1.4.65.3",
+    "api-version": "29",
+    "device-id": "{random_uuid}"
+  }
+
+================================================================================
+7. EXTRACTION WORKFLOW - DETAILED STEPS
+================================================================================
+
+Step 1: Retrieve Active Organizations
+  $ Command: /cpactivorgs
+  $ Bot Action: Fetches and verifies active org codes
+  $ Output: Text file with org codes and details
+
+Step 2: Extract from Specific Organization
+  $ Command: /cp
+  $ Input: ujaliaf*9876543210
+  $ Bot Action: 
+    • Verifies org code exists
+    • Generates OTP to mobile
+    • Prompts for OTP verification
+    • Fetches available courses
+    • Lists batch/course options
+  $ Output: Available courses/batches in organization
+
+Step 3: Select and Download Course Content
+  $ Bot Action: After course selection
+  $ Extracts: Videos, PDFs, and other course materials
+  $ Downloads: Content to local file
+  $ Output: Formatted text file with all links
+
+Step 4: Receive Final Output
+  $ File Format: Text file with all extracted content
+  $ Content: Organization info, course name, all media links
+  $ Logging: Results sent to premium logs channel
+  $ Cleanup: Temporary files removed automatically
+
+================================================================================
+8. TROUBLESHOOTING & COMMON ISSUES
+================================================================================
+
+Issue 1: No organizations found
+  Possible Causes:
+    ✗ ClassPlus API rate limiting
+    ✗ Network connectivity issue
+    ✗ API endpoint changes
+  Solution:
+    • Wait a few minutes and try again
+    • Try using known org codes with /cp command
+    • Check bot logs for detailed error messages
+
+Issue 2: OTP not received
+  Possible Causes:
+    ✗ Invalid mobile number format
+    ✗ Organization doesn't support SMS OTP
+    ✗ Network issue with SMS provider
+  Solution:
+    • Verify mobile number is in correct format: {country_code}{number}
+    • Try with a different mobile number
+    • Check if mobile is registered in that organization
+
+Issue 3: "NO BATCH FOUND" error
+  Possible Causes:
+    ✗ Organization exists but has no courses available
+    ✗ Account not authorized for any courses
+    ✗ Invalid org code
+  Solution:
+    • Verify org code using /cpactivorgs
+    • Try with a different org code
+    • Ensure mobile number is registered in the org
+
+Issue 4: Token invalid after OTP verification
+  Possible Causes:
+    ✗ OTP expired
+    ✗ Wrong OTP entered
+    ✗ Session expired
+  Solution:
+    • Request OTP again
+    • Use the OTP within the valid time window
+    • Start the /cp command process again
+
+================================================================================
+9. PERFORMANCE METRICS
+================================================================================
+
+Typical Performance:
+  • Organization Retrieval: 30-60 seconds for 5 pages of courses
+  • OTP Generation: 5-10 seconds
+  • OTP Verification: 5-10 seconds
+  • Course Extraction: 30-120 seconds (depends on course size)
+  • File Generation: 5-10 seconds
+
+Processing Limits:
+  • Max courses scanned per request: 500 (5 pages × 100 courses)
+  • Max organizations extracted: Limited by API response
+  • File size limit: Depends on content volume (typically < 100MB)
+  • Timeout for API calls: 10 seconds per request
+
+================================================================================
+10. SECURITY NOTES
+================================================================================
+
+Important Security Information:
+  ⚠️  Mobile numbers are sensitive - use only your own
+  ⚠️  Access tokens are temporary and expire
+  ⚠️  Never share tokens or credentials
+  ⚠️  Device IDs are generated randomly for each request
+  ⚠️  Organization codes are public information
+  ⚠️  Bot logs are stored in premium logs channel
+
+Data Privacy:
+  • All API requests use secure HTTPS connections
+  • CloudScraper is used to handle anti-bot protection
+  • Session data is stored temporarily during extraction
+  • Files are automatically deleted after sending
+  • No credentials are permanently stored
+
+================================================================================
+11. ADVANCED USAGE - BATCH PROCESSING
+================================================================================
+
+For bulk extraction of multiple organizations:
+
+Step 1: Use /cpactivorgs to get list of org codes
+
+Step 2: Create a text file with selected org codes:
+  ujaliaf
+  upschool
+  physicswallah
+
+Step 3: Use /cporgcheck to verify all codes at once
+
+Step 4: For each active organization, use /cp command individually:
+  /cp
+  > ujaliaf*9876543210
+  
+  /cp
+  > upschool*9876543210
+  
+  And so on...
+
+Step 5: Collect all extracted files for final processing
+
+================================================================================
+12. API RATE LIMITING & BEST PRACTICES
+================================================================================
+
+ClassPlus API Rate Limits (Estimated):
+  • Requests per second: 10-20
+  • Requests per minute: 500-1000
+  • Requests per hour: Limited by API
+  • Concurrent connections: Limited
+
+Best Practices:
+  ✓ Use /cpactivorgs sparingly (once every 24 hours)
+  ✓ Wait between multiple /cp command invocations
+  ✓ Process /cporgcheck in batches (not all at once)
+  ✓ Avoid concurrent requests from multiple users
+  ✓ Cache organization codes locally
+  ✓ Implement retry logic for failed requests
+
+================================================================================
+13. EXAMPLE OUTPUT FILES
+================================================================================
+
+Example file generated by /cpactivorgs:
+
+──────────────────────────────────────────────────────────────────────────────
+CLASSPLUS ACTIVE ORGANIZATION CODES
+
+Generated on: 12-11-2024 03:45 PM IST
+Total Active Organizations Found: 42
+
+──────────────────────────────────────────────────────────────────────────────
+
+ORGANIZATION CODES:
+──────────────────────────────────────────────────────────────────────────────
+ujaliaf
+upschool
+physicswallah
+classplus
+careerwill
+adda247
+khan
+pw
+
+──────────────────────────────────────────────────────────────────────────────
+
+DETAILED ORGANIZATION INFORMATION:
+──────────────────────────────────────────────────────────────────────────────
+
+1. Organization Code: ujaliaf
+   Organization Name: Ujala Foundation
+   Organization ID: 711528
+   Status: ✅ Active
+   API URL: https://api.classplusapp.com/v2/orgs/ujaliaf
+
+2. Organization Code: upschool
+   Organization Name: UpSchool
+   Organization ID: 711329
+   Status: ✅ Active
+   API URL: https://api.classplusapp.com/v2/orgs/upschool
+
+──────────────────────────────────────────────────────────────────────────────
+
+HOW TO USE THESE ORGANIZATION CODES:
+──────────────────────────────────────────────────────────────────────────────
+
+1. Use with /cp command: Send /cp command and provide:
+   Format: ORG_CODE*MOBILE_NUMBER
+   Example: ujaliaf*9876543210
+
+2. Verify organization details:
+   Visit: https://api.classplusapp.com/v2/orgs/{ORG_CODE}
+
+3. Bulk processing with /cporgcheck command:
+   Create a text file with org codes (one per line)
+   Reply to the file with /cporgcheck command
+
+──────────────────────────────────────────────────────────────────────────────
+
+================================================================================
+14. CONTACT & SUPPORT
+================================================================================
+
+For issues or questions:
+  • Check bot logs in premium logs channel
+  • Review this guide for troubleshooting
+  • Verify organization codes using /cpactivorgs
+  • Test API endpoints manually with curl or Postman
+
+Bot Commands Summary:
+  /cpactivorgs     - Retrieve active organization codes
+  /cpgetorgs       - Alias for cpactivorgs
+  /cp              - Extract from specific organization
+  /cporgcheck      - Verify multiple organization codes
+
+================================================================================
+END OF GUIDE
+================================================================================

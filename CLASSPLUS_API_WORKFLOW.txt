@@ -1,0 +1,742 @@
+================================================================================
+CLASSPLUS API - DETAILED WORKFLOW & TECHNICAL DOCUMENTATION
+================================================================================
+
+This document provides technical details on how to extract and verify 
+active organization codes from ClassPlus using the API infrastructure.
+
+================================================================================
+1. OVERVIEW OF CLASSPLUS ARCHITECTURE
+================================================================================
+
+ClassPlus uses a RESTful API structure with versioning:
+
+Base URL:           https://api.classplusapp.com
+API Version:        v2
+Protocol:           HTTPS
+Authentication:     Token-based (JWT)
+Rate Limiting:      ~10-20 requests per second
+Regional Focus:     India (IN)
+
+API Endpoint Pattern:
+  https://api.classplusapp.com/v2/{resource}/{id}?{query_params}
+
+Example:
+  https://api.classplusapp.com/v2/courses?tabCategoryId=1
+
+================================================================================
+2. COMPLETE WORKFLOW FOR ORGANIZATION EXTRACTION
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                       ORGANIZATION EXTRACTION WORKFLOW                      │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+PHASE 1: DISCOVERY (Get Active Organizations)
+═════════════════════════════════════════════
+
+Method A: Search Published Courses
+  ────────────────────────────────
+  
+  Step 1: Query Published Courses Endpoint
+  ────────────────────────────────────────
+    Endpoint:   GET /v2/course/search/published
+    Parameters: limit=100, offset=0, sortBy=courseCreationDate, status=published
+    Timeout:    10 seconds per request
+    
+    curl -X GET "https://api.classplusapp.com/v2/course/search/published?\
+    limit=100&offset=0&sortBy=courseCreationDate&status=published" \
+      -H "Accept: application/json" \
+      -H "Api-Version: 51"
+    
+    Response:
+    {
+      "status": "success",
+      "data": {
+        "courses": [
+          {
+            "id": 12345,
+            "name": "Course Name",
+            "shareableLink": "https://ujaliaf.courses.store/course/12345",
+            "orgId": 711528,
+            ...
+          },
+          ...
+        ]
+      }
+    }
+
+  Step 2: Extract Organization Code from Shareable Link
+  ──────────────────────────────────────────────────
+    Parse URL: https://ORGCODE.courses.store/course/...
+    Extract:   ORGCODE (e.g., "ujaliaf")
+    
+    Algorithm:
+      1. Get shareableLink from response
+      2. Split by '.' to get subdomain
+      3. Extract first part as org code
+      
+      Example:
+        URL: https://ujaliaf.courses.store/course/12345
+        Code: ujaliaf
+
+  Step 3: Verify Organization Code
+  ────────────────────────────────
+    Call Organization Details Endpoint
+    Endpoint: GET /v2/orgs/{org_code}
+    
+    curl -X GET "https://api.classplusapp.com/v2/orgs/ujaliaf" \
+      -H "Api-Version: 51" \
+      -H "region: IN"
+    
+    Response:
+    {
+      "status": "success",
+      "data": {
+        "orgId": 711528,
+        "orgCode": "ujaliaf",
+        "orgName": "Ujala Foundation",
+        "orgLogoUrl": "...",
+        ...
+      }
+    }
+
+  Step 4: Repeat for Pagination
+  ─────────────────────────────
+    offset = 0, 100, 200, 300, 400 (5 pages × 100 courses = 500 total)
+    Continue until no more courses returned
+
+Method B: Direct Organization Enumeration (Fallback)
+  ──────────────────────────────────────────────────
+  If Method A fails, try known organization patterns:
+  
+  Test Patterns:
+    • test, demo, trial, sample
+    • common org codes from cache
+    • API directory endpoints (if available)
+  
+  For each pattern:
+    GET /v2/orgs/{pattern}
+    If response contains "data" → Organization exists
+    Record: org code, org name, org ID
+
+═════════════════════════════════════════════════════════════════════════════
+
+PHASE 2: USER SELECTION & AUTHENTICATION
+═════════════════════════════════════════
+
+Step 1: User Selects Organization
+  ────────────────────────────────
+  From /cpactivorgs results, user picks an organization code
+  Example: ujaliaf
+  
+  User sends: /cp
+  Then inputs: ujaliaf*9876543210
+              (org_code * mobile_number)
+
+Step 2: Verify Organization Exists (Confirmation Check)
+  ──────────────────────────────────────────────────
+  Endpoint: GET /v2/orgs/{org_code}
+  
+  If status 200 → Organization valid, proceed
+  If status 404 → Organization not found, request new input
+  If status error → Retry or show error
+
+Step 3: Generate OTP
+  ──────────────────
+  Endpoint:  POST /v2/otp/generate
+  Method:    POST (form-urlencoded or JSON)
+  Timeout:   10 seconds
+  
+  Headers Required:
+    Accept: application/json, text/plain, */*
+    Content-Type: application/json;charset=utf-8
+    Api-Version: 51
+    device-id: {random_uuid}
+    region: IN
+  
+  Payload:
+  {
+    "countryExt": "91",
+    "orgCode": "ujaliaf",
+    "viaSms": "1",
+    "mobile": "9876543210",
+    "orgId": 711528,
+    "otpCount": 0
+  }
+  
+  Response Success (200):
+  {
+    "status": "success",
+    "data": {
+      "sessionId": "abc123def456",
+      "message": "OTP sent to your registered mobile"
+    }
+  }
+  
+  Note: Session ID is required for next step
+
+Step 4: User Enters OTP
+  ─────────────────────
+  Bot asks: "Enter the OTP sent to your mobile"
+  User provides: 6-digit or 4-digit OTP
+  Timeout: 300 seconds (5 minutes)
+
+Step 5: Verify OTP & Get Access Token
+  ────────────────────────────────────
+  Endpoint: POST /v2/users/verify
+  Method:   POST
+  
+  Payload:
+  {
+    "otp": "123456",
+    "countryExt": "91",
+    "sessionId": "abc123def456",
+    "orgId": 711528,
+    "fingerprintId": "{random_uuid}",
+    "mobile": "9876543210"
+  }
+  
+  Possible Responses:
+  
+  ✅ Status 200 (Existing User):
+     {
+       "status": "success",
+       "data": {
+         "token": "eyJhbGciOiJIUzM4NCIs...",
+         "user": {...},
+         "message": "Login successful"
+       }
+     }
+  
+  ✅ Status 201 (New User - Registration Required):
+     Proceed to registration (POST /v2/users/register)
+     Similar to verification but includes user details
+  
+  ❌ Status 409 (Conflict - Needs Registration):
+     New user account creation required
+  
+  ❌ Status 400/401 (Invalid OTP):
+     Ask user to retry
+
+═════════════════════════════════════════════════════════════════════════════
+
+PHASE 3: FETCH COURSES & CONTENT
+════════════════════════════════
+
+Step 1: Get Available Courses
+  ───────────────────────────
+  Endpoint: GET /v2/courses?tabCategoryId=1
+  
+  Headers (Authenticated):
+  {
+    "x-access-token": "{token_from_verify}",
+    "user-agent": "Mobile-Android",
+    "app-version": "1.4.65.3",
+    "api-version": "29",
+    "device-id": "{random_uuid}"
+  }
+  
+  Query Parameters:
+    tabCategoryId: 1 (for main courses)
+  
+  Response:
+  {
+    "status": "success",
+    "data": {
+      "courses": [
+        {
+          "id": 12345,
+          "name": "Mathematics - Advanced",
+          "description": "...",
+          "instructor": "Name",
+          ...
+        },
+        ...
+      ]
+    }
+  }
+
+Step 2: User Selects Course
+  ──────────────────────────
+  Bot displays list of courses
+  User selects by sending course number/ID
+
+Step 3: Get Course Content Structure
+  ───────────────────────────────────
+  Endpoint: GET /v2/course/content/get
+  
+  Query Parameters:
+    courseId: {course_id}
+    folderId: 0 (for root content)
+  
+  Response:
+  {
+    "status": "success",
+    "data": {
+      "content": [
+        {
+          "id": "folder_1",
+          "name": "Chapter 1",
+          "type": "folder",
+          "children": [...]
+        },
+        {
+          "id": "video_1",
+          "name": "Lesson 1 - Introduction",
+          "type": "video",
+          "videoUrl": "https://...",
+          "thumbnail": "..."
+        },
+        ...
+      ]
+    }
+  }
+
+Step 4: Get Live Videos (if available)
+  ────────────────────────────────────
+  Endpoint: GET /v2/course/live/list/videos
+  
+  Query Parameters:
+    type: 2 (for recorded/live videos)
+    entityId: {course_id}
+    limit: 9999
+    offset: 0
+  
+  Returns all video content with URLs
+
+Step 5: Extract & Compile Content
+  ────────────────────────────────
+  For each content item:
+    • Videos: Extract video URL + metadata
+    • PDFs: Extract PDF download link
+    • Folders: Recursively process children
+    • Other: Collect media links
+  
+  Compile into structured file
+
+================================================================================
+3. DETAILED API ENDPOINT REFERENCE
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          ENDPOINT SPECIFICATIONS                            │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+1. SEARCH PUBLISHED COURSES
+   ════════════════════════
+   
+   Endpoint:  GET /v2/course/search/published
+   Purpose:   Search for published courses (helps discover organizations)
+   Auth:      None (public endpoint)
+   
+   Query Parameters:
+     • limit       [int]     : Items per page (default: 100, max: 100)
+     • offset      [int]     : Page offset (0, 100, 200, etc.)
+     • sortBy      [string]  : courseCreationDate, popularity, rating
+     • status      [string]  : "published" (for active courses only)
+   
+   Example:
+     GET /v2/course/search/published?limit=100&offset=0&\
+     sortBy=courseCreationDate&status=published
+   
+   Response Fields:
+     • courses[].id              : Course ID
+     • courses[].name            : Course name
+     • courses[].shareableLink   : URL with org code (ujaliaf.courses.store/...)
+     • courses[].description     : Course description
+     • courses[].price           : Course price (if paid)
+     • courses[].instructor      : Instructor name
+   
+   Use: Extract org codes from shareableLink field
+
+
+2. GET ORGANIZATION DETAILS
+   ═══════════════════════════
+   
+   Endpoint:  GET /v2/orgs/{org_code}
+   Purpose:   Get organization information and verify existence
+   Auth:      None (public endpoint)
+   
+   Path Parameters:
+     • org_code  [string]   : Organization code (e.g., "ujaliaf")
+   
+   Example:
+     GET /v2/orgs/ujaliaf
+   
+   Response:
+   {
+     "status": "success",
+     "data": {
+       "orgId": 711528,
+       "orgCode": "ujaliaf",
+       "orgName": "Ujala Foundation",
+       "orgLogoUrl": "https://...",
+       "isVerified": true,
+       "contactEmail": "contact@ujaliaf.org",
+       "website": "https://ujaliaf.org"
+     }
+   }
+   
+   Status Codes:
+     • 200  : Organization found and valid
+     • 404  : Organization not found
+     • 429  : Rate limited (too many requests)
+     • 500  : Server error
+
+
+3. GENERATE OTP FOR LOGIN
+   ═══════════════════════
+   
+   Endpoint:  POST /v2/otp/generate
+   Purpose:   Send OTP to user's registered mobile number
+   Auth:      None (requires valid org + mobile)
+   
+   Headers:
+     Content-Type: application/json;charset=utf-8
+     Api-Version: 51
+     region: IN
+   
+   Body:
+   {
+     "countryExt": "91",           // Country code
+     "orgCode": "ujaliaf",         // Organization code
+     "viaSms": "1",                // Send via SMS (1=yes, 0=no)
+     "mobile": "9876543210",       // Phone number (without country code)
+     "orgId": 711528,              // Org ID (from GET /v2/orgs)
+     "otpCount": 0                 // OTP attempt count
+   }
+   
+   Response (Success):
+   {
+     "status": "success",
+     "data": {
+       "sessionId": "abc123def456xyz789",
+       "message": "OTP sent successfully",
+       "expiresIn": 600
+     }
+   }
+   
+   Response (Failure):
+   {
+     "status": "error",
+     "message": "Invalid organization or mobile number"
+   }
+   
+   Important: Save sessionId for next step
+
+
+4. VERIFY OTP & LOGIN
+   ═══════════════════
+   
+   Endpoint:  POST /v2/users/verify
+   Purpose:   Verify OTP and get access token
+   Auth:      None (requires valid sessionId + OTP)
+   
+   Body:
+   {
+     "otp": "123456",                        // 6-digit OTP
+     "countryExt": "91",
+     "sessionId": "abc123def456xyz789",      // From OTP generation
+     "orgId": 711528,
+     "fingerprintId": "{uuid_v4}",          // Random UUID
+     "mobile": "9876543210"
+   }
+   
+   Response (200 - Existing User):
+   {
+     "status": "success",
+     "data": {
+       "token": "eyJhbGciOiJIUzM4NCIsInR5cCI6IkpXVCJ9...",
+       "userId": 1234567,
+       "userName": "User Name",
+       "email": "user@email.com",
+       "message": "Login successful"
+     }
+   }
+   
+   Response (201 - New User Needs Registration):
+     Proceed to POST /v2/users/register
+   
+   Response (409 - Conflict):
+     User exists but registration needed
+   
+   Important: Store token for authenticated requests
+
+
+5. GET AVAILABLE COURSES
+   ══════════════════════
+   
+   Endpoint:  GET /v2/courses
+   Purpose:   Get list of courses user has access to
+   Auth:      Required (x-access-token)
+   
+   Query Parameters:
+     • tabCategoryId  [int]  : Category filter (1=main courses)
+   
+   Example:
+     GET /v2/courses?tabCategoryId=1
+   
+   Headers:
+   {
+     "x-access-token": "{token}",
+     "user-agent": "Mobile-Android",
+     "app-version": "1.4.65.3",
+     "api-version": "29"
+   }
+   
+   Response:
+   {
+     "status": "success",
+     "data": {
+       "courses": [
+         {
+           "id": 12345,
+           "name": "Course Name",
+           "description": "Description",
+           "thumbnail": "url",
+           "enrollmentStatus": "enrolled",
+           "progress": 45
+         },
+         ...
+       ]
+     }
+   }
+
+
+6. GET COURSE CONTENT/MATERIALS
+   ════════════════════════════
+   
+   Endpoint:  GET /v2/course/content/get
+   Purpose:   Get all content (videos, PDFs, folders) of a course
+   Auth:      Required (x-access-token)
+   
+   Query Parameters:
+     • courseId   [int]  : Course ID (from GET /v2/courses)
+     • folderId   [int]  : Folder ID (0 for root)
+   
+   Example:
+     GET /v2/course/content/get?courseId=12345&folderId=0
+   
+   Response (Content Items):
+   {
+     "status": "success",
+     "data": {
+       "courseContent": [
+         {
+           "id": "item_1",
+           "name": "Chapter 1",
+           "type": "folder",
+           "children": [
+             {
+               "id": "vid_1",
+               "name": "Lesson 1",
+               "type": "video",
+               "videoUrl": "https://..."
+             }
+           ]
+         },
+         {
+           "id": "pdf_1",
+           "name": "Study Material",
+           "type": "pdf",
+           "pdfUrl": "https://..."
+         }
+       ]
+     }
+   }
+   
+   Types: folder, video, pdf, document, image, link
+
+
+7. GET LIVE/RECORDED VIDEOS
+   ═════════════════════════
+   
+   Endpoint:  GET /v2/course/live/list/videos
+   Purpose:   Get all live/recorded video content
+   Auth:      Required (x-access-token)
+   
+   Query Parameters:
+     • type      [int]    : 2 (recorded videos)
+     • entityId  [int]    : Course ID
+     • limit     [int]    : 9999 (get all)
+     • offset    [int]    : 0 (starting position)
+   
+   Example:
+     GET /v2/course/live/list/videos?type=2&entityId=12345&limit=9999&offset=0
+   
+   Response:
+   {
+     "status": "success",
+     "data": {
+       "videos": [
+         {
+           "id": "vid_1",
+           "title": "Video Title",
+           "videoUrl": "https://...",
+           "duration": 3600,
+           "uploadDate": "2024-01-15"
+         }
+       ]
+     }
+   }
+
+================================================================================
+4. HEADER REQUIREMENTS BY ENDPOINT
+================================================================================
+
+Unauthenticated Endpoints:
+  (/v2/orgs/{code}, /v2/course/search/published, /v2/otp/generate)
+  
+  Required Headers:
+  ┌─────────────────────┬──────────────────────────────────────────┐
+  │ Header              │ Value/Description                        │
+  ├─────────────────────┼──────────────────────────────────────────┤
+  │ Accept              │ application/json, text/plain, */*        │
+  │ Content-Type        │ application/json;charset=utf-8           │
+  │ Api-Version         │ 51                                       │
+  │ region              │ IN                                       │
+  │ accept-language     │ en                                       │
+  │ device-id           │ {random_uuid_v4}                         │
+  │ user-agent          │ Mobile-Android                           │
+  │ app-version         │ 1.4.65.3                                 │
+  │ api-version         │ 29                                       │
+  └─────────────────────┴──────────────────────────────────────────┘
+
+
+Authenticated Endpoints:
+  (/v2/courses, /v2/course/content/get, /v2/course/live/list/videos)
+  
+  Required Headers:
+  ┌─────────────────────┬──────────────────────────────────────────┐
+  │ Header              │ Value/Description                        │
+  ├─────────────────────┼──────────────────────────────────────────┤
+  │ x-access-token      │ {token_from_verify_response}             │
+  │ user-agent          │ Mobile-Android                           │
+  │ app-version         │ 1.4.65.3                                 │
+  │ api-version         │ 29                                       │
+  │ device-id           │ {random_uuid_v4}                         │
+  │ Content-Type        │ application/json;charset=utf-8           │
+  └─────────────────────┴──────────────────────────────────────────┘
+
+================================================================================
+5. ERROR HANDLING & STATUS CODES
+================================================================================
+
+HTTP Status Codes:
+  ───────────────
+  200  ✅ Success          - Request completed successfully
+  201  ✅ Created          - New resource created (user registration)
+  202  ⏳ Accepted         - Request accepted, processing
+  400  ❌ Bad Request      - Invalid parameters or malformed request
+  401  ❌ Unauthorized     - Invalid or expired token
+  403  ❌ Forbidden        - Access denied to resource
+  404  ❌ Not Found        - Resource doesn't exist
+  409  ⚠️  Conflict         - User already exists or state conflict
+  429  ⚠️  Too Many Requests - Rate limit exceeded
+  500  ❌ Server Error     - Internal server error
+  502  ❌ Bad Gateway      - API gateway error
+  503  ⚠️  Unavailable     - Service temporarily unavailable
+
+Common Error Responses:
+  ────────────────────
+  
+  Invalid OTP:
+  {
+    "status": "error",
+    "message": "Invalid OTP",
+    "code": "INVALID_OTP"
+  }
+  
+  Organization Not Found:
+  {
+    "status": "error",
+    "message": "Organization not found",
+    "code": "ORG_NOT_FOUND"
+  }
+  
+  Rate Limited:
+  {
+    "status": "error",
+    "message": "Too many requests",
+    "retryAfter": 60
+  }
+
+================================================================================
+6. IMPLEMENTATION TIPS
+================================================================================
+
+✓ Always use CloudScraper to handle anti-bot protection
+✓ Implement retry logic (exponential backoff) for rate limiting
+✓ Cache organization codes to reduce API calls
+✓ Use device-id rotation for multiple requests
+✓ Set timeouts (10 seconds per request)
+✓ Handle both JSON and form-urlencoded responses
+✓ Validate all user inputs before sending to API
+✓ Log all API requests for debugging
+✓ Implement proper error messages for users
+✓ Cache access tokens with expiry tracking
+✓ Clean up temporary files after extraction
+✓ Provide progress updates for long operations
+
+Performance Optimization:
+  • Parallel processing for course content
+  • Connection pooling for multiple requests
+  • Lazy loading of course materials
+  • File streaming for large downloads
+  • Batch operations where possible
+
+================================================================================
+7. SECURITY BEST PRACTICES
+================================================================================
+
+🔐 Data Protection:
+  • Store tokens only temporarily
+  • Clear sensitive data from memory
+  • Use HTTPS for all connections
+  • Validate SSL certificates
+  • Implement rate limiting client-side
+
+📱 Mobile Detection:
+  • ClassPlus API detects mobile vs web clients
+  • Always use user-agent: Mobile-Android
+  • Randomize device-id for each new login
+  • Avoid suspicious user-agent patterns
+
+🛡️ Anti-Bot Measures:
+  • Use CloudScraper library
+  • Implement delays between requests
+  • Rotate IP addresses if making bulk requests
+  • Handle JavaScript-heavy pages
+  • Respect robots.txt and terms of service
+
+================================================================================
+8. DEBUGGING & LOGGING
+================================================================================
+
+Essential Debug Information:
+  1. Request URL and parameters
+  2. Request/Response headers
+  3. Request/Response body (mask tokens)
+  4. HTTP status code
+  5. Response time
+  6. Error messages and codes
+  7. Stack traces
+  8. Device ID and Session ID
+
+Example Log Entry:
+  [2024-01-15 03:45:00] GET /v2/orgs/ujaliaf
+  Status: 200
+  Time: 145ms
+  Response: orgId=711528, orgName="Ujala Foundation"
+
+Monitoring:
+  • Track failed API requests
+  • Monitor rate limit responses
+  • Alert on unexpected status codes
+  • Log token expiry events
+  • Track extraction success rates
+
+================================================================================
+END OF TECHNICAL DOCUMENTATION
+================================================================================
