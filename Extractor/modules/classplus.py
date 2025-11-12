@@ -566,7 +566,7 @@ async def get_active_organizations(app, message):
             page = 0
             page_size = 100
             total_processed = 0
-            max_pages = 100  # Increased to scan 10,000 courses
+            max_pages = 20  # Scan up to 2,000 courses (reasonable limit for Render timeout)
             consecutive_empty = 0  # Track empty responses
             
             while page < max_pages:
